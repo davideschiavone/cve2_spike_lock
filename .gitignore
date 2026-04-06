@@ -1,0 +1,5 @@
+spike_py.cpython*.so
+test.bin
+test.dis
+test.elf
+test.hex

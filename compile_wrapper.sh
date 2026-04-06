@@ -1,4 +1,4 @@
-g++ -O3 -shared -std=c++17 -fPIC \
+g++ -O3 -shared -std=c++20 -fPIC \
     $(python3 -m pybind11 --includes) \
     -I/home/$USER/tools/spike/include \
     spike_wrapper.cpp \
