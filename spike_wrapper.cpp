@@ -6,12 +6,14 @@
 #include <riscv/decode.h>
 #include <riscv/mmu.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <vector>
 #include <string>
 #include <memory>
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <map>
 
 namespace py = pybind11;
 
@@ -204,6 +206,24 @@ public:
             cpu->get_state()->mip->write_with_mask(MIP_MEIP, 0);
     }
 
+    // Returns a map of Address -> Value for all active CSRs
+    std::map<int, reg_t> get_all_csrs() {
+        std::map<int, reg_t> csr_snapshot;
+        auto core = sim->get_core(0);
+        auto& csrmap = core->get_state()->csrmap;
+
+        for (auto const& [addr, csr_ptr] : csrmap) {
+            try {
+                // Read the current value of the CSR
+                csr_snapshot[addr] = csr_ptr->read();
+            } catch (...) {
+                // Some CSRs might trigger side effects or traps on read; skip those
+                continue;
+            }
+        }
+        return csr_snapshot;
+    }
+
     ~SpikeBridge() {
         delete sim;
     }
@@ -216,6 +236,7 @@ PYBIND11_MODULE(spike_py, m) {
         .def("get_pc", &SpikeBridge::get_pc)
         .def("get_reg", &SpikeBridge::get_reg)
         .def("get_disasm", &SpikeBridge::get_disasm)
+        .def("get_csrs", &SpikeBridge::get_all_csrs)
         .def("dump_memory", &SpikeBridge::dump_memory, "Dump n 32-bit words starting from addr",
              py::arg("addr"), py::arg("count"))
         .def("set_interrupt", &SpikeBridge::set_interrupt);
