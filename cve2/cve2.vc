@@ -1,0 +1,35 @@
+--cc
++incdir+./external/cv32e20/rtl
++incdir+./external/cv32e20/vendor/lowrisc_ip/ip/prim/rtl/
++incdir+./external/cv32e20/vendor/lowrisc_ip/dv/sv/dv_utils/
+-CFLAGS -I./external/cv32e20/rtl/
+./waivers/cve2_v5_rvfi.vlt
+./waivers/cve2_v5.vlt
+./waivers/cve2.vlt
+./external/cv32e20/lint/verilator_waiver.vlt
+./external/cv32e20/vendor/lowrisc_ip/ip/prim/rtl/prim_assert.sv
+./external/cv32e20/vendor/lowrisc_ip/ip/prim/rtl/prim_ram_1p_pkg.sv
+./external/cv32e20/rtl/cve2_clock_gate.sv
+./external/cv32e20/rtl/cve2_pkg.sv
+./external/cv32e20/rtl/cve2_alu.sv
+./external/cv32e20/rtl/cve2_branch_predict.sv
+./external/cv32e20/rtl/cve2_compressed_decoder.sv
+./external/cv32e20/rtl/cve2_controller.sv
+./external/cv32e20/rtl/cve2_cs_registers.sv
+./external/cv32e20/rtl/cve2_csr.sv
+./external/cv32e20/rtl/cve2_counter.sv
+./external/cv32e20/rtl/cve2_decoder.sv
+./external/cv32e20/rtl/cve2_ex_block.sv
+./external/cv32e20/rtl/cve2_fetch_fifo.sv
+./external/cv32e20/rtl/cve2_id_stage.sv
+./external/cv32e20/rtl/cve2_if_stage.sv
+./external/cv32e20/rtl/cve2_load_store_unit.sv
+./external/cv32e20/rtl/cve2_multdiv_fast.sv
+./external/cv32e20/rtl/cve2_multdiv_slow.sv
+./external/cv32e20/rtl/cve2_prefetch_buffer.sv
+./external/cv32e20/rtl/cve2_pmp.sv
+./external/cv32e20/rtl/cve2_wb.sv
+./external/cv32e20/rtl/cve2_core.sv
+./external/cv32e20/rtl/cve2_top.sv
+--top-module cve2_top
+-DRVFI=1
