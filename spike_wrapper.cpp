@@ -67,6 +67,65 @@ private:
             );
         }
     }
+    /**
+     * @brief Check if the ISA string indicates vector extension support
+     * @param isa The ISA configuration string
+     * @return true if vector extension is detected, false otherwise
+     */
+
+    /**
+     * Detects if any Vector-related extension is present in the ISA string.
+     * It checks for the standard 'v' extension and modern 'zve' (embedded vector) extensions.
+     */
+    bool detect_vector_extension(const std::string& isa) const {
+        if (isa.length() < 4) return false;
+
+        // 1. Convert to lowercase for case-insensitive comparison
+        std::string lower_isa = isa;
+        for (char &c : lower_isa) c = std::tolower(c);
+
+        // 2. Identify the starting point after the base ISA (rv32 or rv64)
+        size_t pos = 0;
+        if (lower_isa.compare(0, 4, "rv32") == 0 || lower_isa.compare(0, 4, "rv64") == 0) {
+            pos = 4;
+        } else {
+            return false; // Not a standard RISC-V prefix
+        }
+
+        // 3. Parse the rest of the string
+        while (pos < lower_isa.length()) {
+            // Skip separators
+            if (lower_isa[pos] == '_') {
+                pos++;
+                continue;
+            }
+
+            // Check for Multi-letter extensions (starting with 'z', 'x', 's')
+            if (lower_isa[pos] == 'z' || lower_isa[pos] == 'x' || lower_isa[pos] == 's') {
+                // Find the end of this extension block (next underscore or end of string)
+                size_t next_underscore = lower_isa.find('_', pos);
+                std::string ext = lower_isa.substr(pos, next_underscore - pos);
+
+                // 'zve' is the Vector Extension for embedded processors (e.g., zve32x, zve64f)
+                // 'zvl' defines the minimum Vector Length (e.g., zvl128b)
+                if (ext.compare(0, 3, "zve") == 0 || ext.compare(0, 3, "zvl") == 0) {
+                    return true;
+                }
+
+                // Move to the next block
+                pos = (next_underscore == std::string::npos) ? lower_isa.length() : next_underscore;
+            }
+            else {
+                // Check Single-letter extensions (standard G, V, etc.)
+                if (lower_isa[pos] == 'v') {
+                    return true; // Found the primary Vector extension
+                }
+                pos++;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * @brief Load program memory from a Verilog hex file
@@ -196,9 +255,12 @@ public:
             // ============================================================
             // 6. Configure vector unit (if enabled in ISA)
             // ============================================================
-            for (size_t i = 0; i < sim->nprocs(); i++) {
-                sim->get_core(i)->VU.VLEN = 256;   // VLEN in bits (adjustable)
-                sim->get_core(i)->VU.ELEN = 64;    // ELEN in bits (adjustable)
+            if(detect_vector_extension(isa_string)) {
+                std::cout << "[C++] Configuring vector unit for ISA: " << isa_string << std::endl;
+                for (size_t i = 0; i < sim->nprocs(); i++) {
+                    sim->get_core(i)->VU.VLEN = 256;   // VLEN in bits (adjustable)
+                    sim->get_core(i)->VU.ELEN = 64;    // ELEN in bits (adjustable)
+                }
             }
 
             // ============================================================
@@ -370,6 +432,9 @@ public:
      * @return Vector of bytes representing the entire register
      */
     std::vector<uint8_t> get_vec_reg(int i) {
+        if (!detect_vector_extension(isa_string)) {
+            throw std::runtime_error("Vector extension not enabled in ISA: " + isa_string);
+        }
         std::vector<uint8_t> reg_data;
         if (i < 0 || i >= 32 || !sim->get_core(0)) return reg_data;
 
@@ -386,6 +451,9 @@ public:
      * @brief Get Vector Length in bits
      */
     size_t get_vlen() {
+        if (!detect_vector_extension(isa_string)) {
+            throw std::runtime_error("Vector extension not enabled in ISA: " + isa_string);
+        }
         if (sim && sim->get_core(0)) {
             return sim->get_core(0)->VU.get_vlen();
         }
