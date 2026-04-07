@@ -1,0 +1,38 @@
+--Mdir .
+--cc
++incdir+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl
++incdir+/home/schiavon/gitdir/x-heep/hw/vendor/lowrisc/opentitan/hw/ip/prim/rtl/
++incdir+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/vendor/lowrisc_ip/dv/sv/dv_utils/
+-CFLAGS -I/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl
+./my.vlt
+/home/schiavon/gitdir/x-heep/hw/vendor/waiver/lint/cve2_v5.vlt
+/home/schiavon/gitdir/x-heep/hw/vendor/waiver/lint/cve2.vlt
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/lint/verilator_waiver.vlt
+/home/schiavon/gitdir/x-heep/hw/vendor/lowrisc/opentitan/hw/ip/prim/rtl/prim_ram_1p_pkg.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/lowrisc/opentitan/hw/ip/prim/rtl/prim_assert.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_clock_gate.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_pkg.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_alu.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_branch_predict.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_compressed_decoder.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_controller.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_cs_registers.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_csr.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_counter.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_decoder.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_ex_block.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_fetch_fifo.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_id_stage.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_if_stage.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_load_store_unit.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_multdiv_fast.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_multdiv_slow.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_prefetch_buffer.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_pmp.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_wb.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_core.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_top.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_top_tracing.sv
+/home/schiavon/gitdir/x-heep/hw/vendor/openhwgroup/cv32e20/rtl/cve2_tracer.sv
+--top-module cve2_top_tracing
+-DRVFI=1
