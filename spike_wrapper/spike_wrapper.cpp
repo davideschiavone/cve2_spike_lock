@@ -514,6 +514,32 @@ public:
     }
 
     /**
+     * @brief Read a 32-bit word from simulation memory (co-sim store check)
+     *
+     * Reads the value currently stored at `addr` in Spike's flat memory model.
+     * Called by the co-simulation engine after Spike has committed a store, to
+     * verify that the RTL's written data matches.
+     *
+     * @param addr  Byte address (32- or 64-bit, matching XLEN)
+     * @return      32-bit little-endian word at that address
+     * @throws      std::runtime_error on MMU access fault (PMP / out-of-range)
+     */
+    uint32_t read_mem32(uint64_t addr) {
+        try {
+            auto mmu = sim->get_core(0)->get_mmu();
+            return mmu->load<uint32_t>(addr);
+        } catch (trap_t& t) {
+            throw std::runtime_error(
+                "[SpikeBridge::read_mem32] MMU trap at 0x" +
+                std::to_string(addr) + " — " + t.name());
+        } catch (...) {
+            throw std::runtime_error(
+                "[SpikeBridge::read_mem32] Unknown access fault at 0x" +
+                std::to_string(addr));
+        }
+    }
+
+    /**
      * @brief Destructor: clean up Spike simulator
      */
     ~SpikeBridge() {
@@ -577,5 +603,9 @@ PYBIND11_MODULE(spike_py, m) {
              py::arg("addr"), py::arg("count"),
              "Dump n 32-bit words starting from addr")
         .def("set_interrupt", &SpikeBridge::set_interrupt, py::arg("high"),
-             "Set/clear machine external interrupt");
+             "Set/clear machine external interrupt")
+
+        // Co-simulation memory access
+        .def("read_mem32", &SpikeBridge::read_mem32, py::arg("addr"),
+             "Read a 32-bit word from Spike simulation memory (used by cosim)");
 }
