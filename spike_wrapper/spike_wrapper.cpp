@@ -1,26 +1,33 @@
 // ============================================================================
-// spike_wrapper.cpp  –  SpikeBridge implementation + Pybind11 module
+// spike_wrapper.cpp  –  SpikeBridge implementation
 // ============================================================================
 //
-// Compile into a Python extension module:
-//   sh compile_wrapper.sh          (or: make spike_wrapper)
+// Compiled in two modes:
 //
-// The header spike_wrapper.h is also consumed by cosim/cosim.h for
-// the C++ lock-step co-simulation engine.
+//   C++ static library (cosim):
+//     g++ -c spike_wrapper.cpp -o spike_wrapper.o
+//     → pybind11 is NOT required, PYBIND11_MODULE is NOT emitted
+//
+//   Python extension module:
+//     g++ -DSPIKE_WITH_PYBIND11 -shared ... spike_wrapper.cpp -o spike_py*.so
+//     → pybind11 headers included, PYBIND11_MODULE emitted
+//     (compile_wrapper.sh passes -DSPIKE_WITH_PYBIND11 automatically)
+//
 // ============================================================================
 
 #include "spike_wrapper.h"
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#ifdef SPIKE_WITH_PYBIND11
+    #include <pybind11/pybind11.h>
+    #include <pybind11/stl.h>
+    namespace py = pybind11;
+#endif
 
 #include <iostream>
 #include <iomanip>
 #include <fstream>
 #include <stdexcept>
 #include <cstdint>
-
-namespace py = pybind11;
 
 // ============================================================================
 // Private helpers
@@ -155,7 +162,6 @@ SpikeBridge::SpikeBridge(const char* program, const char* isa) {
         cpu_ = sim_->get_core(0);
         auto state = cpu_->get_state();
 
-        // Print initial privilege/PMP state
         std::cout << "\n" << std::string(58, '=') << "\n";
         std::cout << "[DEBUG C++] Privilege CSR PMP/MMU Configuration:\n";
         std::cout << "  Privilege Mode: " << (int)state->prv << " (3=M, 1=S, 0=U)\n";
@@ -233,7 +239,7 @@ uint64_t SpikeBridge::get_reg(int i) {
     if (i < 0 || i >= 32) return 0;
     uint64_t val = cpu_->get_state()->XPR[i];
     if (xlen_ == XLen::XLEN_32)
-        val = (int32_t)val;   // sign-extend
+        val = (int32_t)val;
     return val;
 }
 
@@ -285,9 +291,7 @@ std::map<int, uint64_t> SpikeBridge::get_csrs() {
             if (xlen_ == XLen::XLEN_32)
                 val = (uint32_t)val;
             snapshot[addr] = val;
-        } catch (...) {
-            // skip CSRs that trap on read
-        }
+        } catch (...) {}
     }
     return snapshot;
 }
@@ -326,8 +330,10 @@ uint32_t SpikeBridge::read_mem32(uint64_t addr) {
 }
 
 // ============================================================================
-// Pybind11 Module Definition
+// Pybind11 module  –  only compiled when -DSPIKE_WITH_PYBIND11 is set
 // ============================================================================
+
+#ifdef SPIKE_WITH_PYBIND11
 
 PYBIND11_MODULE(spike_py, m) {
     m.doc() = "RISC-V Spike Simulator Python Wrapper (32-bit and 64-bit support)";
@@ -374,3 +380,5 @@ PYBIND11_MODULE(spike_py, m) {
         .def("read_mem32",  &SpikeBridge::read_mem32, py::arg("addr"),
              "Read a 32-bit word from Spike simulation memory (used by cosim)");
 }
+
+#endif // SPIKE_WITH_PYBIND11

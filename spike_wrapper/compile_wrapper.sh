@@ -12,9 +12,14 @@
 #   sh compile_wrapper.sh module    # same as above
 #   sh compile_wrapper.sh lib       # builds static library
 #
+# The two modes differ in exactly two ways:
+#   module : adds ${PYBIND11_INCLUDES} and -DSPIKE_WITH_PYBIND11
+#            so that the PYBIND11_MODULE block in spike_wrapper.cpp is emitted
+#   lib    : no pybind11 flags → no Python symbols → no Python dependency
+#
 # Requirements:
 #   - Spike headers and libraries installed (default: ~/tools/spike)
-#   - pybind11 installed: pip install pybind11
+#   - pybind11 installed: pip install pybind11  (module mode only)
 #   - g++ with C++20 support
 # ============================================================================
 
@@ -47,27 +52,14 @@ if [ ! -d "${SPIKE_INCLUDE_PATH}/riscv" ]; then
     exit 1
 fi
 
-# Common compiler flags (shared between both modes)
+# Flags shared by both modes — no pybind11 here
 COMMON_FLAGS="-std=c++20 -O3 -Wall -fPIC \
     -I${SPIKE_INCLUDE_PATH}"
 
 # ============================================================================
-# Mode: module  →  spike_py.cpython-*.so
-# ============================================================================
-
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
-PYBIND11_INCLUDES=$(python3 -m pybind11 --includes)
-PYTHON_CONFIG_SUFFIX=$(python3-config --extension-suffix)
-
-echo "[*] Python configuration:"
-echo "    Version:        ${PYTHON_VERSION}"
-echo "    Includes:       ${PYBIND11_INCLUDES}"
-echo "    Extension:      ${PYTHON_CONFIG_SUFFIX}"
-echo ""
-
-
-# ============================================================================
 # Mode: lib  →  libspike_wrapper.a
+# No pybind11 includes, no -DSPIKE_WITH_PYBIND11
+# → PYBIND11_MODULE block is compiled out, no Python symbols emitted
 # ============================================================================
 
 if [ "$MODE" = "lib" ]; then
@@ -80,7 +72,6 @@ if [ "$MODE" = "lib" ]; then
 
     echo "[*] Compiling spike_wrapper.cpp → spike_wrapper.o ..."
     g++ ${COMMON_FLAGS} \
-        ${PYBIND11_INCLUDES} \
         -c spike_wrapper.cpp \
         -o spike_wrapper.o
 
@@ -91,29 +82,44 @@ if [ "$MODE" = "lib" ]; then
     echo ""
     echo "[OK] Static library: ${OUTPUT}"
     echo ""
-else
-
-    OUTPUT="spike_py${PYTHON_CONFIG_SUFFIX}"
-
-    echo "[*] Cleaning old module..."
-    rm -f spike_py.cpython-*.so
-    echo "    Done"
-    echo ""
-
-    echo "[*] Compiling spike_wrapper.cpp → ${OUTPUT} ..."
-    echo ""
-
-    g++ -shared ${COMMON_FLAGS} \
-        ${PYBIND11_INCLUDES} \
-        spike_wrapper.cpp \
-        -L${SPIKE_LIB_PATH} \
-        -Wl,-rpath,${SPIKE_LIB_PATH} \
-        -o "${OUTPUT}" \
-        -lriscv -lfesvr
-
-    echo ""
-    echo "[OK] Python module: ${OUTPUT}"
-    echo ""
+    exit 0
 fi
 
-exit 0
+# ============================================================================
+# Mode: module  →  spike_py.cpython-*.so
+# Adds pybind11 includes and -DSPIKE_WITH_PYBIND11
+# → PYBIND11_MODULE block is compiled in
+# ============================================================================
+
+PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+PYBIND11_INCLUDES=$(python3 -m pybind11 --includes)
+PYTHON_CONFIG_SUFFIX=$(python3-config --extension-suffix)
+
+echo "[*] Python configuration:"
+echo "    Version:        ${PYTHON_VERSION}"
+echo "    Includes:       ${PYBIND11_INCLUDES}"
+echo "    Extension:      ${PYTHON_CONFIG_SUFFIX}"
+echo ""
+
+OUTPUT="spike_py${PYTHON_CONFIG_SUFFIX}"
+
+echo "[*] Cleaning old module..."
+rm -f spike_py.cpython-*.so
+echo "    Done"
+echo ""
+
+echo "[*] Compiling spike_wrapper.cpp → ${OUTPUT} ..."
+echo ""
+
+g++ -shared ${COMMON_FLAGS} \
+    -DSPIKE_WITH_PYBIND11 \
+    ${PYBIND11_INCLUDES} \
+    spike_wrapper.cpp \
+    -L${SPIKE_LIB_PATH} \
+    -Wl,-rpath,${SPIKE_LIB_PATH} \
+    -o "${OUTPUT}" \
+    -lriscv -lfesvr
+
+echo ""
+echo "[OK] Python module: ${OUTPUT}"
+echo ""
