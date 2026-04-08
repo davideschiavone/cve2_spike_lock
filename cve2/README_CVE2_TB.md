@@ -6,14 +6,6 @@ pre-built Verilator static libraries with **RVFI** enabled and correct
 
 ---
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| `cve2_tb.h` | `Cve2Memory` + `Cve2Tb` class |
-| `cve2_tb.cpp` | `main()` – simulation loop |
-| `makefile` | Build rules (links pre-built `.a` files) |
-
 
 ## Quick start
 
@@ -27,16 +19,16 @@ make setup
 make verilate
 
 # build TB no TRACE
-make cve2_tb
+make cve2_sim
 
 # build TB with TRACE
-make cve2_tb_trace
+make cve2_sim_trace
 
 # Run
-make run HEX=../test.hex
+make run HEX=../tests/build/test.hex
 
 # Build with VCD waveform output, then run
-make run_trace HEX=../test.hex
+make run_trace HEX=../tests/build/test.hex MAX_CYCLES=150
 
 # Open waveform
 make view_trace
