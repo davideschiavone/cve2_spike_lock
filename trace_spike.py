@@ -67,7 +67,7 @@ RISCV_CSR_MAP = {
 
     0x5A8: "senvcfg",
     0x747: "mseccfg",
-
+    0x757: "mseccfgh",
     0x008: "vstart",
     0x009: "vxsat",
     0x00A: "vxrm",
