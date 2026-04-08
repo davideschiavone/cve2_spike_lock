@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     }
 
     CoSimConfig cfg;
-    cfg.program_path = std::string(program_str(argv[1]));
+    cfg.program_path = std::string(argv[1]);
     cfg.isa          = (argc >= 3) ? argv[2] : "rv32imc";
 
     for (int i = 3; i < argc; ++i) {

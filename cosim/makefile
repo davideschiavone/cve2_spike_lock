@@ -2,54 +2,66 @@
 # cosim/makefile
 # ============================================================================
 #
-# Builds the lock-step co-simulation binary (cosim_tb / cosim_tb_trace).
+# Builds the lock-step co-simulation binary by linking pre-built libraries.
+# No source files from cve2/ or spike_wrapper/ are recompiled here.
 #
-# Directory layout assumed:
+# Build order:
+#   1. cd ../cve2          && make lib        → build_cve2/libcve2_tb.a
+#                          && make build_lib  → build_cve2/libV*.a + libverilated.a
+#   2. cd ../spike_wrapper && make lib        → libspike_wrapper.a
+#   3. cd ../cosim         && make cosim_tb
+#
+# Directory layout:
 #
 #   <root>/
 #     cve2/
-#       build_cve2/          ← Verilated static libraries
-#       cve2_tb.h
-#       cve2_tb.cpp
+#       build_cve2/
+#         libcve2_tb.a          ← compiled from cve2_tb.cpp
+#         libVcve2_top.a        ← Verilated RTL
+#         libverilated.a        ← Verilator runtime
+#         Vcve2_top__ALL.a      ← Verilated RTL (all)
+#       cve2_tb.h               ← included for struct/class declarations
 #     spike_wrapper/
-#       spike_wrapper.h
-#       spike_wrapper.cpp
+#       libspike_wrapper.a      ← compiled from spike_wrapper.cpp
+#       spike_wrapper.h         ← included for SpikeBridge declaration
 #     cosim/
 #       cosim.h
 #       cosim.cpp
-#       cosim_main.cpp       ← this makefile lives here
+#       cosim_main.cpp          ← this makefile lives here
 #
-# Prerequisites:
-#   1. Run `make verilate` (or `make build_lib`) in ../cve2/   first
-#   2. Spike installed at ~/tools/spike  (override with SPIKE_INCLUDE / SPIKE_LIB)
 # ============================================================================
 
 # --- Sibling directories ------------------------------------------------------
 CVE2_DIR          := ../cve2
 SPIKE_WRAPPER_DIR := ../spike_wrapper
 
-# --- CVE2 build artefacts -----------------------------------------------------
+# --- CVE2 pre-built libraries -------------------------------------------------
 CVE2_BUILD_DIR := $(CVE2_DIR)/build_cve2
 TOP_MODULE     := cve2_top
 
 CVE2_LIBS := \
+    $(CVE2_BUILD_DIR)/libcve2_tb.a \
     $(CVE2_BUILD_DIR)/libV$(TOP_MODULE).a \
     $(CVE2_BUILD_DIR)/libverilated.a \
     $(CVE2_BUILD_DIR)/V$(TOP_MODULE)__ALL.a
 
-# --- Verilator runtime headers (needed for cve2_tb.h) -------------------------
+# --- Spike wrapper pre-built library ------------------------------------------
+SPIKE_WRAPPER_LIB := $(SPIKE_WRAPPER_DIR)/libspike_wrapper.a
+
+# --- Verilator runtime headers ------------------------------------------------
 VERILATOR_ROOT ?= $(shell verilator --getenv VERILATOR_ROOT 2>/dev/null)
 VROOT_INC       = $(VERILATOR_ROOT)/include
 
-# --- Spike installation --------------------------------------------------------
+# --- Spike installation -------------------------------------------------------
 SPIKE_INCLUDE ?= /home/$(USER)/tools/spike/include
 SPIKE_LIB     ?= /home/$(USER)/tools/spike/lib
 
-# --- Compiler ------------------------------------------------------------------
+# --- Compiler -----------------------------------------------------------------
 CXX      ?= g++
 CXXFLAGS  = -std=c++20 -O2 -Wall \
-            -I$(CVE2_BUILD_DIR) \
+            -I./ \
             -I$(CVE2_DIR) \
+            -I$(CVE2_BUILD_DIR) \
             -I$(SPIKE_WRAPPER_DIR) \
             -I$(VROOT_INC) \
             -I$(VROOT_INC)/vltstd \
@@ -62,24 +74,16 @@ LDFLAGS = \
     -lriscv -lfesvr \
     -lpthread -lm -ldl
 
-TRACE_SRC := $(VROOT_INC)/verilated_vcd_c.cpp
+# --- cosim source files (only cosim itself, no upstream sources) --------------
+COSIM_SRCS := cosim.cpp cosim_main.cpp
+COSIM_HDRS := cosim.h \
+              $(CVE2_DIR)/cve2_tb.h \
+              $(SPIKE_WRAPPER_DIR)/spike_wrapper.h
 
-# --- Source files --------------------------------------------------------------
-#   cosim.cpp            – CoSim engine (no main)
-#   cosim_main.cpp       – main()
-#   spike_wrapper.cpp    – SpikeBridge implementation (no main)
-#   cve2_tb.cpp          – Cve2Tb implementation (no main)
-
-COSIM_SRCS := \
-    cosim.cpp \
-    cosim_main.cpp \
-    $(SPIKE_WRAPPER_DIR)/spike_wrapper.cpp \
-    $(CVE2_DIR)/cve2_tb.cpp
-
-COSIM_HDRS := \
-    cosim.h \
-    $(CVE2_DIR)/cve2_tb.h \
-    $(SPIKE_WRAPPER_DIR)/spike_wrapper.h
+# --- All libraries to link ----------------------------------------------------
+ALL_LIBS := \
+    $(SPIKE_WRAPPER_LIB) \
+    $(CVE2_LIBS)
 
 # ============================================================================
 # Phony targets
@@ -94,54 +98,46 @@ help:
 	@echo "Spike × CVE2 Lock-Step Co-Simulation"
 	@echo "=========================================================================="
 	@echo ""
+	@echo "PREREQUISITES (run once before building cosim):"
+	@echo "  cd ../cve2          && build the libraries (like cve2_lib and verilated model)"
+	@echo "  cd ../spike_wrapper && make spike_wrapper_lib (build libspike_wrapper.a)"
+	@echo ""
 	@echo "TARGETS:"
-	@echo "  cosim_tb        - Build co-simulation binary (no waveform)"
-	@echo "  cosim_tb_trace  - Build co-simulation binary (VCD waveform)"
-	@echo "  cosim_run       - Build and run  (set PROGRAM=, ISA=)"
-	@echo "  cosim_run_verbose - Build and run with verbose trace"
-	@echo "  clean           - Remove build artefacts"
+	@echo "  cosim_tb            - Build co-simulation binary (no waveform)"
+	@echo "  cosim_tb_trace      - Build co-simulation binary (VCD waveform)"
+	@echo "  cosim_run           - Build and run  (set HEX=, PROGRAM=, ISA=)"
+	@echo "  cosim_run_verbose   - Build and run with per-instruction trace"
+	@echo "  clean               - Remove build artefacts"
 	@echo ""
 	@echo "EXAMPLES:"
 	@echo "  make cosim_tb"
-	@echo "  make cosim_run PROGRAM=../tests/build/test ISA=rv32imc"
-	@echo "  make cosim_run_verbose PROGRAM=../tests/build/test ISA=rv32imc"
+	@echo "  make cosim_run PROGRAM=../tests/build/test \\"
+	@echo "                 ISA=rv32imc"
+	@echo "  make cosim_run_verbose PROGRAM=../tests/build/test \\"
+	@echo "                         ISA=rv32imc"
 	@echo "=========================================================================="
 
 # ============================================================================
 # cosim_tb  –  no waveform
 # ============================================================================
 
-cosim_tb: $(COSIM_SRCS) $(COSIM_HDRS) $(CVE2_LIBS)
-	@echo "[BUILD] cosim_tb  (lock-step co-simulation, no trace)"
+cosim_tb: $(COSIM_SRCS) $(COSIM_HDRS) $(ALL_LIBS)
+	@echo "[BUILD] cosim_tb  (no trace)"
 	$(CXX) $(CXXFLAGS) \
 	    $(COSIM_SRCS) \
 	    -o cosim_tb \
-	    $(CVE2_LIBS) $(LDFLAGS)
+	    $(ALL_LIBS) $(LDFLAGS)
 	@echo "[OK]    cosim_tb"
-
-# ============================================================================
-# cosim_tb_trace  –  VCD waveform enabled
-# ============================================================================
-
-cosim_tb_trace: $(COSIM_SRCS) $(COSIM_HDRS) $(CVE2_LIBS)
-	@echo "[BUILD] cosim_tb_trace  (lock-step co-simulation + VCD trace)"
-	$(CXX) $(CXXFLAGS) -g -DTRACE \
-	    $(COSIM_SRCS) \
-	    $(TRACE_SRC) \
-	    -o cosim_tb_trace \
-	    $(CVE2_LIBS) $(LDFLAGS)
-	@echo "[OK]    cosim_tb_trace"
-	@echo "        Run it, then open cve2_wave.vcd in GTKWave"
 
 # ============================================================================
 # Convenience run targets
 # ============================================================================
 
 cosim_run: cosim_tb
-	./cosim_tb $(PROGRAM) $(ISA)
+	./cosim_tb $(HEX) $(PROGRAM) $(ISA)
 
 cosim_run_verbose: cosim_tb
-	./cosim_tb $(PROGRAM) $(ISA) --verbose
+	./cosim_tb $(HEX) $(PROGRAM) $(ISA) --verbose
 
 # ============================================================================
 # Clean

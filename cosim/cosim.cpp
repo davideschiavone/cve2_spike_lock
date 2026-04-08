@@ -233,8 +233,9 @@ bool CoSim::compare(const RvfiInsn& rvfi, const SpikeState& ss, CoSimResult& res
 void CoSim::print_trace_line(uint64_t n, const RvfiInsn& rvfi,
                               const SpikeState& ss, bool ok) const
 {
-    const char* status = ok ? (colour::GREEN "OK " colour::RESET)
-                            : (colour::RED   "ERR" colour::RESET);
+    std::string status = ok ? (std::string(colour::GREEN) + "OK " + colour::RESET)
+                            : (std::string(colour::RED) + "ERR" + colour::RESET);
+    
     std::string rd_str = "-";
     if (rvfi.rd_addr != 0) {
         char buf[48];
@@ -248,7 +249,7 @@ void CoSim::print_trace_line(uint64_t n, const RvfiInsn& rvfi,
                 rvfi.insn,
                 (rvfi.rd_addr ? ABI_NAMES[rvfi.rd_addr] : "-"),
                 rd_str.c_str(),
-                status);
+                status.c_str());
 }
 
 // ============================================================================

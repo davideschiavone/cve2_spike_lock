@@ -10,9 +10,9 @@
 #   make all             →  both of the above
 # ============================================================================
 
-.PHONY: all clean spike_wrapper lib help
+.PHONY: all clean spike_wrapper spike_wrapper_lib help
 
-all: spike_wrapper lib
+all: spike_wrapper spike_wrapper_lib
 
 help:
 	@echo "=========================================================================="
@@ -20,10 +20,10 @@ help:
 	@echo "=========================================================================="
 	@echo ""
 	@echo "TARGETS:"
-	@echo "  spike_wrapper  - Compile into Python extension  (spike_py.cpython-*.so)"
-	@echo "  lib            - Compile into static library     (libspike_wrapper.a)"
-	@echo "  all            - Both of the above"
-	@echo "  clean          - Remove all generated files"
+	@echo "  spike_wrapper     - Compile into Python extension  (spike_py.cpython-*.so)"
+	@echo "  spike_wrapper_lib - Compile into static library     (libspike_wrapper.a)"
+	@echo "  all               - Both of the above"
+	@echo "  clean             - Remove all generated files"
 	@echo ""
 	@echo "Both targets use compile_wrapper.sh as the single source of truth"
 	@echo "for compiler flags, Spike paths, and pybind11 detection."
@@ -45,7 +45,7 @@ spike_wrapper: spike_wrapper.h spike_wrapper.cpp compile_wrapper.sh
 # Static library for C++ consumers (cosim)
 # ============================================================================
 
-lib: spike_wrapper.h spike_wrapper.cpp compile_wrapper.sh
+spike_wrapper_lib: spike_wrapper.h spike_wrapper.cpp compile_wrapper.sh
 	sh ./compile_wrapper.sh lib
 
 # ============================================================================
