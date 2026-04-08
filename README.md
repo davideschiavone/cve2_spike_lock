@@ -10,6 +10,10 @@ export LIBRARY_PATH="/home/$USER/tools/spike/lib:$LIBRARY_PATH"
 export RVA23_COMPILER=/home/$USER/tools/riscv_rva23
 ```
 
+## Install Verilator
+
+Make sure to use the `5.040` version.
+
 ## Install SPIKE
 
 ```

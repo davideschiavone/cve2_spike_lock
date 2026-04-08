@@ -91,12 +91,20 @@ const uint8_t* Cve2Memory::ram_data()  const { return ram_.get();  }
 // SlowBus
 // ============================================================================
 
-SlowBus::SlowBus(const std::string& name, Cve2Memory& mem, std::mt19937& rng)
-    : name_       (name)
-    , mem_        (mem)
-    , rng_        (rng)
-    , gnt_dist_   (0, GNT_PROB_DEN - 1)
-    , delay_dist_ (0, MAX_RVALID_DELAY)
+SlowBus::SlowBus(const std::string& name,
+                 Cve2Memory&        mem,
+                 std::mt19937&      rng,
+                 int                gnt_prob_num,
+                 int                gnt_prob_den,
+                 int                max_rvalid_delay)
+    : name_            (name)
+    , mem_             (mem)
+    , rng_             (rng)
+    , gnt_prob_num_    (gnt_prob_num)
+    , gnt_prob_den_    (gnt_prob_den)
+    , max_rvalid_delay_(max_rvalid_delay)
+    , gnt_dist_        (0, std::max(1, gnt_prob_den) - 1)
+    , delay_dist_      (0, std::max(0, max_rvalid_delay))
 {}
 
 void SlowBus::tick(uint8_t   req_i,
@@ -136,12 +144,19 @@ void SlowBus::tick(uint8_t   req_i,
     // ── C: attempt to grant ──────────────────────────────────────────
     gnt_o = 0;
 
-    if (req_pending_ && (gnt_dist_(rng_) < GNT_PROB_NUM)) {
+    // When gnt_prob_num_ >= gnt_prob_den_ always grant (handles 0-delay case)
+    bool do_grant = (gnt_prob_num_ >= gnt_prob_den_) ||
+                    (gnt_dist_(rng_) < gnt_prob_num_);
+
+    if (req_pending_ && do_grant) {
         if (pending_we_)
             mem_.write32(pending_addr_, pending_wdata_, pending_be_);
 
         uint32_t rdata = pending_we_ ? 0u : mem_.read32(pending_addr_);
-        rvalid_fifo_.push({ 1 + delay_dist_(rng_), rdata });
+
+        // extra_delay = 0 when max_rvalid_delay_ == 0 (no randomness needed)
+        int extra_delay = (max_rvalid_delay_ > 0) ? delay_dist_(rng_) : 0;
+        rvalid_fifo_.push({ 1 + extra_delay, rdata });
 
         gnt_o        = 1;
         req_pending_ = false;
@@ -164,12 +179,15 @@ void SlowBus::reset() {
 Cve2Tb::Cve2Tb(const std::string& hex_path,
                uint32_t           boot_addr,
                uint64_t           max_cycles,
-               uint32_t           rng_seed)
+               uint32_t           rng_seed,
+               int                gnt_prob_num,
+               int                gnt_prob_den,
+               int                max_rvalid_delay)
     : boot_addr_ (boot_addr)
     , max_cycles_(max_cycles)
     , rng_       (rng_seed)
-    , instr_bus_ ("INSTR", mem_, rng_)
-    , data_bus_  ("DATA",  mem_, rng_)
+    , instr_bus_ ("INSTR", mem_, rng_, gnt_prob_num, gnt_prob_den, max_rvalid_delay)
+    , data_bus_  ("DATA",  mem_, rng_, gnt_prob_num, gnt_prob_den, max_rvalid_delay)
 {
     ctx_ = std::make_unique<VerilatedContext>();
     dut_ = std::make_unique<Vcve2_top>(ctx_.get(), "TOP");
@@ -189,9 +207,9 @@ Cve2Tb::Cve2Tb(const std::string& hex_path,
               << std::hex << boot_addr_ << std::dec << "\n";
     std::cout << "[Cve2Tb] RNG seed          : " << rng_seed          << "\n";
     std::cout << "[Cve2Tb] GNT probability   : "
-              << GNT_PROB_NUM << "/" << GNT_PROB_DEN                   << "\n";
+              << gnt_prob_num << "/" << gnt_prob_den << "\n";
     std::cout << "[Cve2Tb] Max RVALID delay  : +"
-              << MAX_RVALID_DELAY << " cycles (on top of mandatory 1)\n";
+              << max_rvalid_delay << " cycles (on top of mandatory 1)\n";
 }
 
 Cve2Tb::~Cve2Tb() {
@@ -270,6 +288,10 @@ bool              Cve2Tb::rvfi_valid() const { return rvfi_valid_; }
 const RvfiInsn&   Cve2Tb::rvfi()       const { return rvfi_;       }
 Cve2Memory&       Cve2Tb::memory()           { return mem_;        }
 const Cve2Memory& Cve2Tb::memory()     const { return mem_;        }
+
+const std::vector<RetiredInsn>& Cve2Tb::retired_log() const {
+    return retired_log_;
+}
 
 void Cve2Tb::print_rvfi() const {
     if (!rvfi_valid_) return;
@@ -370,6 +392,9 @@ void Cve2Tb::capture_rvfi() {
     rvfi_.mem_wmask = dut_->rvfi_mem_wmask;
     rvfi_.mem_rdata = dut_->rvfi_mem_rdata;
     rvfi_.mem_wdata = dut_->rvfi_mem_wdata;
+
+    // Record in the retirement log with current cycle timestamp
+    retired_log_.push_back({ cycle_, rvfi_ });
 
     if (rvfi_.trap || rvfi_.halt ||
         rvfi_.pc_wdata == rvfi_.pc_rdata)

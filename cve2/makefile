@@ -16,17 +16,36 @@ CVE2_DIR  := $(EXT_DIR)/cv32e20
 BUILD_DIR := build_cve2
 VC_FILE   := cve2.vc
 
+# --- Trace flag ----------------------------------------------------------------
+# TRACE controls VCD waveform support in cve2_tb.  It must be set consistently
+# everywhere cve2_tb.h is included — the library, cve2_sim, cve2_py, and cosim
+# must all agree, otherwise the Cve2Tb struct layout differs between translation
+# units and every member after tfp_ lands at the wrong offset (segfault).
+#
+# Default: enabled.  Override with: make TRACE=0 ...
+TRACE ?= 1
+
+ifeq ($(TRACE),1)
+  TRACE_FLAG := -DTRACE
+else
+  TRACE_FLAG :=
+endif
+
+# Export so that compile_cve2_py.sh and any sub-makes pick it up automatically.
+export TRACE
+export TRACE_FLAG
+
 # --- Verilator flags -----------------------------------------------------------
 VERILATOR  := verilator
 TOP_MODULE := cve2_top
-V_FLAGS    := -Wall -cc --trace --trace-structs --trace-underscore \
-              --trace-max-array 1024
+
+V_FLAGS := -Wall -cc --trace --trace-structs --trace-underscore \
+           --trace-max-array 1024 \
+           -CFLAGS -fPIC
 
 TRACE_SRC  := $(VROOT_INC)/verilated_vcd_c.cpp
 
 # --- Verilated library outputs -------------------------------------------------
-# Note: libV$(TOP_MODULE).a and V$(TOP_MODULE)__ALL.a are identical files
-# produced by Verilator --build. Only one is needed.
 VERILATED_LIBS := \
     $(BUILD_DIR)/V$(TOP_MODULE)__ALL.a \
     $(BUILD_DIR)/libverilated.a
@@ -34,7 +53,9 @@ VERILATED_LIBS := \
 # --- C++ compiler --------------------------------------------------------------
 CXX      ?= g++
 AR       ?= ar
-CXXFLAGS  = -std=c++20 -O2 -Wall \
+
+CXXFLAGS  = -std=c++20 -O2 -Wall -fPIC \
+            $(TRACE_FLAG) \
             -I$(BUILD_DIR) \
             -I./ \
             -I$(VROOT_INC) \
@@ -49,7 +70,7 @@ RTL_SRCS := $(wildcard $(CVE2_DIR)/rtl/*.sv) \
 # Phony targets
 # ============================================================================
 
-.PHONY: all clean setup verilate cve2_lib help
+.PHONY: all clean setup verilate cve2_lib cve2_py help
 
 all: verilate cve2_lib
 
@@ -66,10 +87,6 @@ setup:
 	fi
 
 # --- 2. Verilate ---------------------------------------------------------------
-# Depends on all RTL .sv sources: any change to the RTL forces re-verilation.
-# The stamp file $(BUILD_DIR)/.verilate_stamp is touched on success so make
-# can track freshness without re-inspecting all library archives.
-
 $(BUILD_DIR)/.verilate_stamp: $(VC_FILE) $(RTL_SRCS) | setup
 	@echo "--- Verilating $(TOP_MODULE) ---"
 	@mkdir -p $(BUILD_DIR)
@@ -79,31 +96,37 @@ $(BUILD_DIR)/.verilate_stamp: $(VC_FILE) $(RTL_SRCS) | setup
 		--top-module $(TOP_MODULE) \
 		--build
 	@touch $@
-	@echo "--- Verilaton complete ---"
+	@echo "--- Verilation complete ---"
 
 verilate: $(BUILD_DIR)/.verilate_stamp
 
-# --- 3. libcve2_tb.a  –  testbench static library ----------------------------
-#
-# Depends on the verilate stamp so that any RTL change triggers full
-# re-verilation before the testbench library is (re-)compiled.
-#
-# Compiled WITH -DTRACE so the default library has waveforms.
+# --- 3. libcve2_tb.a -----------------------------------------------------------
+# The TRACE_FLAG recorded at library build time is written into a small
+# header so that consumers (cosim, cve2_py) can verify they were compiled
+# with the same setting.
 
 $(BUILD_DIR)/libcve2_tb.a: cve2_tb.cpp cve2_tb.h $(BUILD_DIR)/.verilate_stamp
-	@echo "[AR]  libcve2_tb.a"
-	$(CXX) $(CXXFLAGS) -c -DTRACE cve2_tb.cpp -o $(BUILD_DIR)/cve2_tb.o
+	@echo "[AR]  libcve2_tb.a  (TRACE=$(TRACE))"
+	$(CXX) $(CXXFLAGS) -c cve2_tb.cpp -o $(BUILD_DIR)/cve2_tb.o
 	$(AR) rcs $@ $(BUILD_DIR)/cve2_tb.o
+	@echo "$(TRACE_FLAG)" > $(BUILD_DIR)/cve2_tb_trace_flag.txt
 	@echo "[OK]  $(BUILD_DIR)/libcve2_tb.a"
 
 cve2_lib: $(BUILD_DIR)/libcve2_tb.a
+
+# --- 4. cve2_py  –  Python extension module -----------------------------------
+cve2_py: cve2_pybind.cpp cve2_tb.h compile_cve2_py.sh \
+         $(BUILD_DIR)/libcve2_tb.a $(VERILATED_LIBS)
+	@echo "[BUILD] cve2_py Python module  (TRACE=$(TRACE))"
+	TOP_MODULE=$(TOP_MODULE) sh ./compile_cve2_py.sh
+	@echo "[OK]    cve2_py Python module ready"
 
 # ============================================================================
 # Standalone CVE2 simulation binary (developer convenience)
 # ============================================================================
 
 cve2_sim: cve2_sim.cpp cve2_tb.h $(BUILD_DIR)/libcve2_tb.a $(VERILATED_LIBS)
-	@echo "[BUILD] cve2_sim  (no trace)"
+	@echo "[BUILD] cve2_sim  (TRACE=$(TRACE))"
 	$(CXX) $(CXXFLAGS) \
 	    cve2_sim.cpp \
 	    -o cve2_sim \
@@ -114,7 +137,7 @@ cve2_sim: cve2_sim.cpp cve2_tb.h $(BUILD_DIR)/libcve2_tb.a $(VERILATED_LIBS)
 
 cve2_sim_trace: cve2_sim.cpp cve2_tb.h $(BUILD_DIR)/libcve2_tb.a $(VERILATED_LIBS)
 	@echo "[BUILD] cve2_sim_trace  (VCD trace enabled)"
-	$(CXX) $(CXXFLAGS) -g \
+	$(CXX) $(CXXFLAGS) -DTRACE -g \
 	    cve2_sim.cpp \
 	    $(TRACE_SRC) \
 	    -o cve2_sim_trace \
@@ -134,9 +157,32 @@ run_trace: cve2_sim_trace
 view_trace:
 	gtkwave cve2_wave.vcd cve2.gtkw
 
+# --- Help ---------------------------------------------------------------------
+help:
+	@echo "=========================================================================="
+	@echo "CVE2 Verilator Build"
+	@echo "=========================================================================="
+	@echo ""
+	@echo "TARGETS:"
+	@echo "  setup            - Clone CVE2 RTL into external/"
+	@echo "  verilate         - Run Verilator on the CVE2 RTL"
+	@echo "  cve2_lib         - Build libcve2_tb.a"
+	@echo "  cve2_sim         - Build standalone simulation binary (no VCD by default)"
+	@echo "  cve2_sim_trace   - Build standalone simulation binary (VCD forced on)"
+	@echo "  cve2_py          - Build Python extension module"
+	@echo "  run              - Run cve2_sim  (HEX=, MAX_CYCLES=)"
+	@echo "  run_trace        - Run cve2_sim_trace (HEX=, MAX_CYCLES=)"
+	@echo "  view_trace       - Open cve2_wave.vcd in GTKWave"
+	@echo "  clean            - Remove build artefacts"
+	@echo ""
+	@echo "TRACE flag (must match across all consumers of libcve2_tb.a):"
+	@echo "  make TRACE=1 ...  (default) — VCD support compiled in"
+	@echo "  make TRACE=0 ...            — VCD support omitted"
+	@echo "=========================================================================="
+
 # --- Clean --------------------------------------------------------------------
 clean:
-	rm -rf $(BUILD_DIR) cve2_sim cve2_sim_trace
+	rm -rf $(BUILD_DIR) cve2_sim cve2_sim_trace cve2_py.cpython-*.so
 	@echo "Build directory cleaned."
 
 distclean: clean

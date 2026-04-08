@@ -10,10 +10,16 @@
 //   0x0000_1000  Boot ROM   4 KB
 //   0x8000_0000  RAM       16 MB
 //
-// Bus protocol tuning knobs (see cve2_tb.cpp)
-// ─────────────────────────────────────────────
-//   GNT_PROB_NUM / GNT_PROB_DEN   probability of granting each cycle
-//   MAX_RVALID_DELAY               max extra cycles between GNT and RVALID
+// Bus protocol tuning knobs
+// ─────────────────────────────────────────────────────
+//   gnt_prob_num / gnt_prob_den   probability of granting each cycle
+//                                 (default 1/1 → always grant immediately)
+//   max_rvalid_delay               max extra cycles between GNT and RVALID
+//                                 (default 0 → RVALID exactly 1 cycle after GNT)
+//
+// The legacy compile-time constants GNT_PROB_NUM, GNT_PROB_DEN and
+// MAX_RVALID_DELAY are kept as fallback defaults when no runtime value
+// is supplied.
 //
 // ============================================================================
 
@@ -44,12 +50,15 @@ constexpr uint32_t BOOT_ADDR = BOOT_BASE;
 
 constexpr uint8_t FETCH_ENABLE_ON = 0x1u;
 
-// GNT probability per cycle = GNT_PROB_NUM / GNT_PROB_DEN
-constexpr int GNT_PROB_NUM     = 1;
-constexpr int GNT_PROB_DEN     = 2;
+// Default bus timing constants (used only when runtime values are not provided)
+constexpr int DEFAULT_GNT_PROB_NUM     = 1;    // always grant
+constexpr int DEFAULT_GNT_PROB_DEN     = 1;    // (1/1 = 100%)
+constexpr int DEFAULT_MAX_RVALID_DELAY = 0;    // RVALID 1 cycle after GNT (minimum)
 
-// Extra cycles on top of the mandatory 1-cycle GNT→RVALID gap
-constexpr int MAX_RVALID_DELAY = 3;
+// Legacy aliases kept for backward compatibility (cosim overrides these at runtime)
+constexpr int GNT_PROB_NUM     = DEFAULT_GNT_PROB_NUM;
+constexpr int GNT_PROB_DEN     = DEFAULT_GNT_PROB_DEN;
+constexpr int MAX_RVALID_DELAY = DEFAULT_MAX_RVALID_DELAY;
 
 // ============================================================================
 // vlwide_zero  –  zero a Verilator VlWide<N> packed-struct signal
@@ -133,11 +142,21 @@ struct RvalidEntry {
 
 // ============================================================================
 // SlowBus  –  randomised GNT / RVALID OBI-like bus model
+//
+// gnt_prob_num / gnt_prob_den  – probability that GNT is asserted each cycle.
+//   Setting both to the same value (e.g. 1/1) means always grant immediately.
+// max_rvalid_delay – extra cycles added on top of the mandatory 1-cycle
+//   GNT→RVALID gap.  0 means RVALID arrives exactly 1 cycle after GNT.
 // ============================================================================
 
 class SlowBus {
 public:
-    SlowBus(const std::string& name, Cve2Memory& mem, std::mt19937& rng);
+    SlowBus(const std::string& name,
+            Cve2Memory&        mem,
+            std::mt19937&      rng,
+            int                gnt_prob_num     = DEFAULT_GNT_PROB_NUM,
+            int                gnt_prob_den     = DEFAULT_GNT_PROB_DEN,
+            int                max_rvalid_delay = DEFAULT_MAX_RVALID_DELAY);
 
     void tick(uint8_t   req_i,
               uint32_t  addr_i,
@@ -156,6 +175,10 @@ private:
     Cve2Memory&    mem_;
     std::mt19937&  rng_;
 
+    int gnt_prob_num_;
+    int gnt_prob_den_;
+    int max_rvalid_delay_;
+
     std::uniform_int_distribution<int> gnt_dist_;
     std::uniform_int_distribution<int> delay_dist_;
 
@@ -169,15 +192,30 @@ private:
 };
 
 // ============================================================================
+// RetiredInsn  –  record of one retired instruction with cycle timestamp
+// ============================================================================
+
+struct RetiredInsn {
+    uint64_t cycle      = 0;   // cycle at which this instruction retired
+    RvfiInsn rvfi       = {};
+};
+
+// ============================================================================
 // Cve2Tb  –  testbench wrapper around the Verilated CVE2 model
+//
+// gnt_prob_num / gnt_prob_den  – bus grant probability (default 1/1 = 100%)
+// max_rvalid_delay             – max extra cycles GNT→RVALID (default 0)
 // ============================================================================
 
 class Cve2Tb {
 public:
     explicit Cve2Tb(const std::string& hex_path,
-                    uint32_t           boot_addr  = BOOT_ADDR,
-                    uint64_t           max_cycles = 1'000'000ULL,
-                    uint32_t           rng_seed   = 42);
+                    uint32_t           boot_addr        = BOOT_ADDR,
+                    uint64_t           max_cycles       = 1'000'000ULL,
+                    uint32_t           rng_seed         = 42,
+                    int                gnt_prob_num     = DEFAULT_GNT_PROB_NUM,
+                    int                gnt_prob_den     = DEFAULT_GNT_PROB_DEN,
+                    int                max_rvalid_delay = DEFAULT_MAX_RVALID_DELAY);
 
     ~Cve2Tb();
 
@@ -194,6 +232,9 @@ public:
     const RvfiInsn&   rvfi()       const;
     Cve2Memory&       memory();
     const Cve2Memory& memory()     const;
+
+    // Retirement log (populated automatically during step())
+    const std::vector<RetiredInsn>& retired_log() const;
 
     void print_rvfi() const;
 
@@ -218,4 +259,6 @@ private:
     std::mt19937 rng_;
     SlowBus      instr_bus_;
     SlowBus      data_bus_;
+
+    std::vector<RetiredInsn> retired_log_;
 };

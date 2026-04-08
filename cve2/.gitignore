@@ -3,3 +3,4 @@ external
 cve2_sim
 cve2_sim_trace
 cve2_wave.vcd
+cve2_py.cpython-*.so
