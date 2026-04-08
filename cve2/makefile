@@ -19,14 +19,21 @@ VC_FILE   := cve2.vc
 # --- Verilator flags -----------------------------------------------------------
 VERILATOR  := verilator
 TOP_MODULE := cve2_top
-V_FLAGS    := -Wall -cc --trace --trace-structs --trace-underscore \
-              --trace-max-array 1024
+
+# -fPIC is essentially free on x86-64 (no register pressure unlike 32-bit).
+# Building everything with -fPIC from the start means the same .a libraries
+# can be linked into both regular executables (cve2_sim, cosim_tb) and the
+# Python shared object (cve2_py.so) without recompiling anything twice.
+#
+# VM_USER_CFLAGS propagates -fPIC into the Verilator-generated model build
+# (Verilator's --build invokes its own make internally and honours this var).
+V_FLAGS := -Wall -cc --trace --trace-structs --trace-underscore \
+           --trace-max-array 1024 \
+           -CFLAGS -fPIC
 
 TRACE_SRC  := $(VROOT_INC)/verilated_vcd_c.cpp
 
 # --- Verilated library outputs -------------------------------------------------
-# Note: libV$(TOP_MODULE).a and V$(TOP_MODULE)__ALL.a are identical files
-# produced by Verilator --build. Only one is needed.
 VERILATED_LIBS := \
     $(BUILD_DIR)/V$(TOP_MODULE)__ALL.a \
     $(BUILD_DIR)/libverilated.a
@@ -34,7 +41,10 @@ VERILATED_LIBS := \
 # --- C++ compiler --------------------------------------------------------------
 CXX      ?= g++
 AR       ?= ar
-CXXFLAGS  = -std=c++20 -O2 -Wall \
+
+# -fPIC included here so cve2_tb.o and every other object we compile
+# can be linked into either an executable or a .so without issue.
+CXXFLAGS  = -std=c++20 -O2 -Wall -fPIC \
             -I$(BUILD_DIR) \
             -I./ \
             -I$(VROOT_INC) \
@@ -49,7 +59,7 @@ RTL_SRCS := $(wildcard $(CVE2_DIR)/rtl/*.sv) \
 # Phony targets
 # ============================================================================
 
-.PHONY: all clean setup verilate cve2_lib help
+.PHONY: all clean setup verilate cve2_lib cve2_py help
 
 all: verilate cve2_lib
 
@@ -66,9 +76,9 @@ setup:
 	fi
 
 # --- 2. Verilate ---------------------------------------------------------------
-# Depends on all RTL .sv sources: any change to the RTL forces re-verilation.
-# The stamp file $(BUILD_DIR)/.verilate_stamp is touched on success so make
-# can track freshness without re-inspecting all library archives.
+# -CFLAGS -fPIC inside V_FLAGS passes -fPIC to every source Verilator
+# compiles during --build (generated model + verilated runtime).
+# The stamp file tracks freshness; any RTL change forces re-verilaton.
 
 $(BUILD_DIR)/.verilate_stamp: $(VC_FILE) $(RTL_SRCS) | setup
 	@echo "--- Verilating $(TOP_MODULE) ---"
@@ -79,16 +89,13 @@ $(BUILD_DIR)/.verilate_stamp: $(VC_FILE) $(RTL_SRCS) | setup
 		--top-module $(TOP_MODULE) \
 		--build
 	@touch $@
-	@echo "--- Verilaton complete ---"
+	@echo "--- Verilation complete ---"
 
 verilate: $(BUILD_DIR)/.verilate_stamp
 
-# --- 3. libcve2_tb.a  –  testbench static library ----------------------------
-#
-# Depends on the verilate stamp so that any RTL change triggers full
-# re-verilation before the testbench library is (re-)compiled.
-#
-# Compiled WITH -DTRACE so the default library has waveforms.
+# --- 3. libcve2_tb.a -----------------------------------------------------------
+# CXXFLAGS already includes -fPIC, so this library is safe to link into
+# both executables and shared objects.
 
 $(BUILD_DIR)/libcve2_tb.a: cve2_tb.cpp cve2_tb.h $(BUILD_DIR)/.verilate_stamp
 	@echo "[AR]  libcve2_tb.a"
@@ -97,6 +104,15 @@ $(BUILD_DIR)/libcve2_tb.a: cve2_tb.cpp cve2_tb.h $(BUILD_DIR)/.verilate_stamp
 	@echo "[OK]  $(BUILD_DIR)/libcve2_tb.a"
 
 cve2_lib: $(BUILD_DIR)/libcve2_tb.a
+
+# --- 4. cve2_py  –  Python extension module -----------------------------------
+# All libraries are already PIC-compiled, so this is a straightforward link.
+
+cve2_py: cve2_pybind.cpp cve2_tb.h compile_cve2_py.sh \
+         $(BUILD_DIR)/libcve2_tb.a $(VERILATED_LIBS)
+	@echo "[BUILD] cve2_py Python module"
+	TOP_MODULE=$(TOP_MODULE) sh ./compile_cve2_py.sh
+	@echo "[OK]    cve2_py Python module ready"
 
 # ============================================================================
 # Standalone CVE2 simulation binary (developer convenience)
@@ -134,9 +150,32 @@ run_trace: cve2_sim_trace
 view_trace:
 	gtkwave cve2_wave.vcd cve2.gtkw
 
+# --- Help ---------------------------------------------------------------------
+help:
+	@echo "=========================================================================="
+	@echo "CVE2 Verilator Build"
+	@echo "=========================================================================="
+	@echo ""
+	@echo "TARGETS:"
+	@echo "  setup            - Clone CVE2 RTL into external/"
+	@echo "  verilate         - Run Verilator on the CVE2 RTL (-fPIC, one build)"
+	@echo "  cve2_lib         - Build libcve2_tb.a"
+	@echo "  cve2_sim         - Build standalone simulation binary (no trace)"
+	@echo "  cve2_sim_trace   - Build standalone simulation binary (VCD trace)"
+	@echo "  cve2_py          - Build Python extension module"
+	@echo "  run              - Run cve2_sim  (HEX=, MAX_CYCLES=)"
+	@echo "  run_trace        - Run cve2_sim_trace (HEX=, MAX_CYCLES=)"
+	@echo "  view_trace       - Open cve2_wave.vcd in GTKWave"
+	@echo "  clean            - Remove build artefacts"
+	@echo ""
+	@echo "QUICK START (Python pipeline viewer):"
+	@echo "  make setup verilate cve2_lib cve2_py"
+	@echo "  python3 trace_cve2.py tests/build/test.hex"
+	@echo "=========================================================================="
+
 # --- Clean --------------------------------------------------------------------
 clean:
-	rm -rf $(BUILD_DIR) cve2_sim cve2_sim_trace
+	rm -rf $(BUILD_DIR) cve2_sim cve2_sim_trace cve2_py.cpython-*.so
 	@echo "Build directory cleaned."
 
 distclean: clean

@@ -36,6 +36,13 @@ make run_trace HEX=../tests/build/test.hex MAX_CYCLES=180
 # Open waveform
 make view_trace
 ```
+### if you want to bind it to Python
+
+```bash
+
+# Python bind
+make cve2_py
+```
 
 ---
 
