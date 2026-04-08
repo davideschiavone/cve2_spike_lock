@@ -2,10 +2,10 @@
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
 [*] Wed Apr  8 06:08:48 2026
 [*]
-[dumpfile] "/home/schiavon/gitdir/spike_python_wrapper/cve2/cve2_wave.vcd"
+[dumpfile] "cve2_wave.vcd"
 [dumpfile_mtime] "Wed Apr  8 05:59:27 2026"
 [dumpfile_size] 598960
-[savefile] "/home/schiavon/gitdir/spike_python_wrapper/cve2/cve2.gtkw"
+[savefile] "cve2.gtkw"
 [timestart] 49
 [size] 1854 1121
 [pos] -1 -1

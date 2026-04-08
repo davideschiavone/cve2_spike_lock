@@ -39,7 +39,7 @@ make run HEX=../test.hex
 make run_trace HEX=../test.hex
 
 # Open waveform
-gtkwave cve2_wave.vcd
+make view_trace
 ```
 
 ---

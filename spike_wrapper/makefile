@@ -1,9 +1,5 @@
 # ============================================================================
-# RISC-V Spike Wrapper -
-# ============================================================================
-
-# ============================================================================
-# Targets
+# spike_wrapper/makefile
 # ============================================================================
 
 .PHONY: all clean spike_wrapper help
@@ -12,30 +8,34 @@ all: spike_wrapper
 
 help:
 	@echo "=========================================================================="
-	@echo "RISC-V Spike Wrapper - Configurable Build"
+	@echo "RISC-V Spike Wrapper - Pybind11 Python Module"
 	@echo "=========================================================================="
 	@echo ""
-	@echo "USAGE:"
-	@echo "  make [target] [OPTIONS]"
-	@echo ""
 	@echo "TARGETS:"
-	@echo "  spike_wrapper    - Compile C++ Pybind11 wrapper"
-	@echo "  clean            - Remove generated files"
-	@echo "  help             - Show this help message"
+	@echo "  spike_wrapper  - Compile spike_wrapper.cpp into a Python .so module"
+	@echo "  clean          - Remove generated .so files"
+	@echo "  help           - Show this message"
 	@echo ""
-
+	@echo "PREREQUISITES:"
+	@echo "  - Spike headers/libs installed at ~/tools/spike"
+	@echo "  - pip install pybind11"
+	@echo "  - g++ with C++20 support"
+	@echo "=========================================================================="
 
 # ============================================================================
-# C++ Spike Wrapper Compilation (Pybind11)
+# Build the Pybind11 Python extension module
+#   Sources:
+#     spike_wrapper.h   – SpikeBridge declaration
+#     spike_wrapper.cpp – SpikeBridge implementation + PYBIND11_MODULE
 # ============================================================================
 
-spike_wrapper:
-	@echo "[BUILD] C++ Spike Wrapper (Python module)"
+spike_wrapper: spike_wrapper.h spike_wrapper.cpp
+	@echo "[BUILD] Spike Pybind11 wrapper (spike_wrapper.h + spike_wrapper.cpp)"
 	sh ./compile_wrapper.sh
 	@echo "[OK] Output: spike_py.cpython-*.so"
 
 # ============================================================================
-# Clean Generated Files
+# Clean
 # ============================================================================
 
 clean:
