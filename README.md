@@ -2,7 +2,9 @@
 
 Lock-step co-simulation of the **OpenHW CVE2** RISC-V core (Verilator) against
 the **Spike** ISA simulator, plus Python bindings for both so you can drive
-them from a script and render **Konata-style** pipeline diagrams as HTML.
+them from a script. CVE2 retirements are rendered as a **Konata-style**
+pipeline diagram in HTML; Spike is not cycle-accurate so it only emits a
+textual instruction trace.
 
 ## What this repo is
 
@@ -23,8 +25,8 @@ them from a script and render **Konata-style** pipeline diagrams as HTML.
             |                           |                             |
             v                           v                             v
     trace_cve2.py               trace_spike.py                    cosim_tb
-    -> pipeline_cve2.html       -> pipeline_spike.html            (CLI binary)
-    (+ cve2_wave.vcd)
+    -> pipeline_cve2.html       -> stdout instruction trace       (CLI binary)
+    (+ cve2_wave.vcd)           (no pipeline — Spike is ISS)
 ```
 
 Components:
@@ -35,7 +37,7 @@ Components:
 | `spike_wrapper/`  | C++ wrapper over Spike; builds `spike_py.so` (Python) **and** `libspike_wrapper.a` (for cosim) |
 | `cosim/`          | Lock-step comparator binary `cosim_tb`                                  |
 | `tests/`          | `test.S` + linker script + makefile -> `test.elf/.bin/.dis/.hex`         |
-| `trace_spike.py`  | Runs Spike via `spike_py`, emits Konata HTML                             |
+| `trace_spike.py`  | Runs Spike via `spike_py`, prints a textual instruction trace            |
 | `trace_cve2.py`   | Runs CVE2 via `cve2_py`, emits Konata HTML + optional VCD                |
 | `env.sh`          | Sources tool paths + Python venv                                         |
 | `Makefile`        | Top-level orchestrator (delegates to sub-makefiles)                      |
@@ -142,7 +144,7 @@ make all                        # tests + spike_py + cve2_py + cosim_tb
 
 # 4. run something
 make run-cosim       PROGRAM=tests/build/test ISA=rv32imc
-make run-trace-spike PROGRAM=tests/build/test ISA=rv32imc   # -> pipeline_spike.html
+make run-trace-spike PROGRAM=tests/build/test ISA=rv32imc   # -> stdout trace
 make run-trace-cve2  HEX=tests/build/test.hex               # -> pipeline_cve2.html
 ```
 
@@ -164,8 +166,10 @@ Outputs in `tests/build/`: `test.elf`, `test.bin`, `test.dis`, `test.hex`.
 make run-trace-spike PROGRAM=tests/build/test ISA=rv32imc MAX_INSTRUCTIONS=200
 ```
 
-Opens `pipeline_spike.html` in a browser.  Pass `--no-browser` via direct
-`python3 trace_spike.py ...` to skip opening it.
+Prints a textual instruction trace to stdout: PC, disassembly, and register
+changes per step, plus initial and final processor state (GPRs/FPRs/CSRs).
+Spike is a functional ISS with no cycle / pipeline model, so there is no
+pipeline HTML here — use `run-trace-cve2` for pipeline visualisation.
 
 ### CVE2-only trace (with VCD)
 
