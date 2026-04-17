@@ -6,7 +6,7 @@
 # Toolchain Configuration
 # ============================================================================
 
-RISCV_BIN       := $(RVA23_COMPILER)/bin/
+RISCV_BIN       := $(RISCV_COMPILER)/bin/
 
 # Automatically detect the compiler prefix
 # It checks for riscv64-unknown-elf-gcc first; if missing, it switches to any found GCC

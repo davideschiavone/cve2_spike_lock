@@ -10,8 +10,9 @@
 #   4. Activates .venv/ if it exists.
 #   5. Prints a summary of detected tools.
 #
-# Customize RISCV_COMPILER to point to a different toolchain:
-#   $ RISCV_COMPILER=/opt/riscv32 source env.sh
+# Customize paths before sourcing (all optional):
+#   $ SPIKE_PREFIX=/opt/spike RISCV_COMPILER=/opt/riscv32 source env.sh
+#   $ VERILATOR_PREFIX=/opt/verilator source env.sh  # if not on system PATH
 #
 # Everything in this file is idempotent — safe to re-source.
 # ============================================================================
@@ -29,10 +30,11 @@ REPO_ROOT="$(cd "$(dirname "$_ENV_SH_PATH")" && pwd)"
 export REPO_ROOT
 
 # --- Tool paths ---------------------------------------------------------------
-# Override SPIKE_PREFIX or RISCV_COMPILER before sourcing to use different paths.
+# Override any of these before sourcing to use non-default install paths.
 : "${SPIKE_PREFIX:=$HOME/tools/spike}"
 : "${RISCV_COMPILER:=$HOME/tools/riscv32-embecosm}"
-export SPIKE_PREFIX RISCV_COMPILER
+: "${VERILATOR_PREFIX:=}"          # optional — leave empty if verilator is on system PATH
+export SPIKE_PREFIX RISCV_COMPILER VERILATOR_PREFIX
 
 # --- Idempotent PATH-like prepend -------------------------------------------
 _prepend_path () {
@@ -47,17 +49,19 @@ _prepend_path () {
 }
 
 # --- Spike -------------------------------------------------------------------
-if [ -d "$SPIKE_PREFIX" ]; then
-    _prepend_path PATH            "$SPIKE_PREFIX/bin"
-    _prepend_path LD_LIBRARY_PATH "$SPIKE_PREFIX/lib"
-    _prepend_path CPATH           "$SPIKE_PREFIX/include"
-    _prepend_path LIBRARY_PATH    "$SPIKE_PREFIX/lib"
+# Always prepend — binary check happens later; MISS only if truly absent.
+_prepend_path PATH            "$SPIKE_PREFIX/bin"
+_prepend_path LD_LIBRARY_PATH "$SPIKE_PREFIX/lib"
+_prepend_path CPATH           "$SPIKE_PREFIX/include"
+_prepend_path LIBRARY_PATH    "$SPIKE_PREFIX/lib"
+
+# --- Verilator (optional prefix) ---------------------------------------------
+if [ -n "$VERILATOR_PREFIX" ]; then
+    _prepend_path PATH "$VERILATOR_PREFIX/bin"
 fi
 
 # --- RISC-V toolchain --------------------------------------------------------
-if [ -d "$RISCV_COMPILER/bin" ]; then
-    _prepend_path PATH "$RISCV_COMPILER/bin"
-fi
+_prepend_path PATH "$RISCV_COMPILER/bin"
 
 # --- Python virtualenv -------------------------------------------------------
 if [ -f "$REPO_ROOT/.venv/bin/activate" ]; then
@@ -74,9 +78,10 @@ _ok ()     { printf '  \033[32m[ OK ]\033[0m  %s\n' "$*"; }
 _miss ()   { printf '  \033[31m[MISS]\033[0m  %s\n' "$*"; }
 
 echo "cve2_spike_lock environment"
-echo "  REPO_ROOT      = $REPO_ROOT"
-echo "  SPIKE_PREFIX   = $SPIKE_PREFIX"
-echo "  RISCV_COMPILER = $RISCV_COMPILER"
+echo "  REPO_ROOT        = $REPO_ROOT"
+echo "  SPIKE_PREFIX     = $SPIKE_PREFIX"
+echo "  RISCV_COMPILER   = $RISCV_COMPILER"
+echo "  VERILATOR_PREFIX = ${VERILATOR_PREFIX:-(system PATH)}"
 echo ""
 echo "Tool check:"
 
@@ -145,4 +150,4 @@ echo "Ready. Try: make help"
 
 unset _ENV_SH_PATH _GPP_VER _GPP_MAJOR _VL_VER _RV_GCC _PY_VER
 unset -f _prepend_path _warn _ok _miss
-unset SPIKE_PREFIX RISCV_COMPILER
+# NOTE: SPIKE_PREFIX, RISCV_COMPILER, VERILATOR_PREFIX stay exported for sub-processes.

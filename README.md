@@ -55,11 +55,12 @@ Pinned versions (repo is tested against these exactly):
 | Python                | >= 3.8                                                  | system                          |
 | pybind11              | >= 2.11                                                 | installed into `.venv`          |
 
-Override paths before sourcing `env.sh`:
+Override paths before sourcing `env.sh` (all optional):
 
 ```bash
 export SPIKE_PREFIX=/opt/spike
 export RISCV_COMPILER=/opt/riscv32-embecosm
+export VERILATOR_PREFIX=/opt/verilator   # only needed if verilator is not on system PATH
 source env.sh
 ```
 
@@ -130,7 +131,7 @@ git clone <this repo>
 cd cve2_spike_lock
 
 # 1. tell the shell where the tools live
-source env.sh                   # sets PATH/LD_LIBRARY_PATH/RVA23_COMPILER, checks versions
+source env.sh                   # sets PATH/LD_LIBRARY_PATH/RISCV_COMPILER, checks versions
 
 # 2. create the Python venv (one-time)
 make venv
