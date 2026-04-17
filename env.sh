@@ -5,13 +5,13 @@
 #
 # What it does:
 #   1. Exports Spike paths (PATH, LD_LIBRARY_PATH, CPATH, LIBRARY_PATH).
-#   2. Exports RVA23_COMPILER (RISC-V GCC toolchain prefix).
+#   2. Exports RISCV_COMPILER (RISC-V RV32 GCC toolchain).
 #   3. Detects Verilator and warns if the version is not 5.040.
 #   4. Activates .venv/ if it exists.
 #   5. Prints a summary of detected tools.
 #
-# Customize TOOLS_ROOT to point to a different install prefix:
-#   $ TOOLS_ROOT=/opt/riscv source env.sh
+# Customize RISCV_COMPILER to point to a different toolchain:
+#   $ RISCV_COMPILER=/opt/riscv32 source env.sh
 #
 # Everything in this file is idempotent — safe to re-source.
 # ============================================================================
@@ -28,13 +28,11 @@ fi
 REPO_ROOT="$(cd "$(dirname "$_ENV_SH_PATH")" && pwd)"
 export REPO_ROOT
 
-# --- Tool install prefix -----------------------------------------------------
-# Override by exporting TOOLS_ROOT before sourcing.
-: "${TOOLS_ROOT:=$HOME/tools}"
-export TOOLS_ROOT
-
-SPIKE_PREFIX="$TOOLS_ROOT/spike"
-RVA23_PREFIX="$TOOLS_ROOT/riscv_rva23"
+# --- Tool paths ---------------------------------------------------------------
+# Override SPIKE_PREFIX or RISCV_COMPILER before sourcing to use different paths.
+: "${SPIKE_PREFIX:=$HOME/tools/spike}"
+: "${RISCV_COMPILER:=$HOME/tools/riscv32-embecosm}"
+export SPIKE_PREFIX RISCV_COMPILER
 
 # --- Idempotent PATH-like prepend -------------------------------------------
 _prepend_path () {
@@ -57,9 +55,8 @@ if [ -d "$SPIKE_PREFIX" ]; then
 fi
 
 # --- RISC-V toolchain --------------------------------------------------------
-export RVA23_COMPILER="$RVA23_PREFIX"
-if [ -d "$RVA23_PREFIX/bin" ]; then
-    _prepend_path PATH "$RVA23_PREFIX/bin"
+if [ -d "$RISCV_COMPILER/bin" ]; then
+    _prepend_path PATH "$RISCV_COMPILER/bin"
 fi
 
 # --- Python virtualenv -------------------------------------------------------
@@ -77,8 +74,9 @@ _ok ()     { printf '  \033[32m[ OK ]\033[0m  %s\n' "$*"; }
 _miss ()   { printf '  \033[31m[MISS]\033[0m  %s\n' "$*"; }
 
 echo "cve2_spike_lock environment"
-echo "  REPO_ROOT  = $REPO_ROOT"
-echo "  TOOLS_ROOT = $TOOLS_ROOT"
+echo "  REPO_ROOT      = $REPO_ROOT"
+echo "  SPIKE_PREFIX   = $SPIKE_PREFIX"
+echo "  RISCV_COMPILER = $RISCV_COMPILER"
 echo ""
 echo "Tool check:"
 
@@ -114,11 +112,11 @@ else
 fi
 
 # RISC-V GCC
-_RV_GCC=$(ls "$RVA23_PREFIX"/bin/*-elf-gcc 2>/dev/null | head -1)
+_RV_GCC=$(ls "$RISCV_COMPILER"/bin/*-elf-gcc 2>/dev/null | head -1)
 if [ -n "$_RV_GCC" ]; then
     _ok "risc-v gcc  ($_RV_GCC)"
 else
-    _miss "no *-elf-gcc in $RVA23_PREFIX/bin (set RVA23_COMPILER or install toolchain)"
+    _miss "no *-elf-gcc in $RISCV_COMPILER/bin (set RISCV_COMPILER or install toolchain)"
 fi
 
 # Python
@@ -147,3 +145,4 @@ echo "Ready. Try: make help"
 
 unset _ENV_SH_PATH _GPP_VER _GPP_MAJOR _VL_VER _RV_GCC _PY_VER
 unset -f _prepend_path _warn _ok _miss
+unset SPIKE_PREFIX RISCV_COMPILER

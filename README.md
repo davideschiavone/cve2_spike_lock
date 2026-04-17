@@ -45,18 +45,23 @@ Components:
 
 Pinned versions (repo is tested against these exactly):
 
-| Tool                  | Version / commit                                        | Install prefix             |
-|-----------------------|---------------------------------------------------------|----------------------------|
-| Verilator             | **5.040**                                               | system / `$PATH`           |
-| Spike (riscv-isa-sim) | commit `0ad45926ac6f42d0d39e936abf4ab1cb9bdc5086`       | `$TOOLS_ROOT/spike`        |
-| riscv-gnu-toolchain   | commit `f27c68dd632102a1eab85d97a90f3cdc4e90350c`       | `$TOOLS_ROOT/riscv_rva23`  |
-| OpenHW CVE2 RTL       | commit `e35390a7754f4e9acbce22840835a7a0f045ddc7`       | cloned by `make cve2`      |
-| g++                   | **>= 10** (C++20)                                       | system                     |
-| Python                | >= 3.8                                                  | system                     |
-| pybind11              | >= 2.11                                                 | installed into `.venv`     |
+| Tool                  | Version / commit                                        | Install prefix                  |
+|-----------------------|---------------------------------------------------------|---------------------------------|
+| Verilator             | **5.040**                                               | system / `$PATH`                |
+| Spike (riscv-isa-sim) | commit `0ad45926ac6f42d0d39e936abf4ab1cb9bdc5086`       | `$HOME/tools/spike`             |
+| riscv32-embecosm      | RV32 cross-compiler                                     | `$HOME/tools/riscv32-embecosm`  |
+| OpenHW CVE2 RTL       | commit `e35390a7754f4e9acbce22840835a7a0f045ddc7`       | cloned by `make cve2`           |
+| g++                   | **>= 10** (C++20)                                       | system                          |
+| Python                | >= 3.8                                                  | system                          |
+| pybind11              | >= 2.11                                                 | installed into `.venv`          |
 
-`TOOLS_ROOT` defaults to `$HOME/tools`.  Override before sourcing `env.sh`:
-`TOOLS_ROOT=/opt/riscv source env.sh`.
+Override paths before sourcing `env.sh`:
+
+```bash
+export SPIKE_PREFIX=/opt/spike
+export RISCV_COMPILER=/opt/riscv32-embecosm
+source env.sh
+```
 
 ### OS packages (Ubuntu/Debian)
 
@@ -78,8 +83,6 @@ cd verilator
 git checkout v5.040
 autoconf && ./configure && make -j$(nproc)
 sudo make install
-# or to keep it under $TOOLS_ROOT:
-#   ./configure --prefix=$HOME/tools/verilator && make install
 ```
 
 Check: `verilator --version` should print `Verilator 5.040 ...`.
@@ -87,6 +90,7 @@ Check: `verilator --version` should print `Verilator 5.040 ...`.
 ### Install Spike (riscv-isa-sim)
 
 ```bash
+mkdir -p $HOME/tools
 git clone https://github.com/riscv-software-src/riscv-isa-sim.git
 cd riscv-isa-sim
 git checkout 0ad45926ac6f42d0d39e936abf4ab1cb9bdc5086
@@ -96,21 +100,28 @@ make -j$(nproc)
 make install
 ```
 
-### Install RISC-V GNU Toolchain (RVA23 profile)
+### Install RISC-V RV32 Compiler (Embecosm)
+
+Repo uses **32-bit** RISC-V only (CVE2 is RV32). Install pre-built toolchain:
 
 ```bash
-git clone https://github.com/riscv/riscv-gnu-toolchain
-cd riscv-gnu-toolchain
-git checkout f27c68dd632102a1eab85d97a90f3cdc4e90350c
-./configure --prefix=$HOME/tools/riscv_rva23 \
-            --with-arch=rv64gc_zba_zbb_zbs_v_zicond_zcb_zfa \
-            --with-abi=lp64d
-make -j$(nproc)
+mkdir -p $HOME/tools
+cd $HOME/tools
+wget https://github.com/embecosm/riscv-gnu-toolchain/releases/download/2024.02.0/riscv32-embecosm-ubuntu2204-gcc13.2.0.tar.gz
+tar xzf riscv32-embecosm-ubuntu2204-gcc13.2.0.tar.gz
+mv riscv32-embecosm-ubuntu2204 riscv32-embecosm
 ```
 
-> The toolchain is built RV64 but still produces RV32 code when you pass
-> `-march=rv32imc -mabi=ilp32` to `gcc`. This repo's default test build is
-> RV32 because CVE2 is a 32-bit core.
+Or build from source:
+
+```bash
+git clone https://github.com/riscv-collab/riscv-gnu-toolchain.git
+cd riscv-gnu-toolchain
+./configure --prefix=$HOME/tools/riscv32-embecosm \
+            --with-arch=rv32imc \
+            --with-abi=ilp32
+make -j$(nproc)
+```
 
 ## Quick start
 
@@ -205,16 +216,15 @@ Override with `make TRACE=0 all` (disables VCD support everywhere).
 
 ## Reproducing results
 
-1. Install Verilator 5.040, Spike at the pinned commit, toolchain at the pinned commit.
-2. `TOOLS_ROOT=$HOME/tools source env.sh`.
+1. Install Verilator 5.040, Spike (pinned commit), riscv32-embecosm toolchain.
+2. `source env.sh` (auto-detects `$HOME/tools/{spike,riscv32-embecosm}`).
 3. `make venv && source env.sh && make all`.
-4. `make run-cosim PROGRAM=tests/build/test ISA=rv32imc` — exit code 0 means RTL
-   and Spike retired the same stream.
+4. `make run-cosim PROGRAM=tests/build/test ISA=rv32imc` — exit code 0 = match.
 
-Pinned commits live in:
+Pinned tool versions in:
 
 - `cve2/makefile` (`CVE2_BRANCH` for CVE2 RTL).
-- this README (Spike + toolchain).
+- this README (Spike, Verilator).
 
 ## Troubleshooting
 
@@ -228,9 +238,9 @@ from `LD_LIBRARY_PATH`.
 
 ### `No RISC-V toolchain found in ...`
 
-`env.sh` did not find `*-elf-gcc` under `$RVA23_COMPILER/bin`.  Either install
-the toolchain at `$TOOLS_ROOT/riscv_rva23`, or `export
-RVA23_COMPILER=/path/to/your/toolchain` before `make tests`.
+`env.sh` did not find `*-elf-gcc` under `$RISCV_COMPILER/bin`. Either install
+at `$HOME/tools/riscv32-embecosm`, or `export
+RISCV_COMPILER=/path/to/your/toolchain` before `make tests`.
 
 ### `verilator: command not found` / wrong version
 
