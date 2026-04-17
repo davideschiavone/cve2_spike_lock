@@ -1,3 +1,6 @@
 .vscode
+.venv/
+__pycache__/
+*.pyc
 cve2_wave.vcd
 pipeline*.html

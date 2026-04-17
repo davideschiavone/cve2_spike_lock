@@ -1,0 +1,4 @@
+# Python runtime + build dependencies for cve2_spike_lock.
+# Used by `make venv`.
+
+pybind11>=2.11
